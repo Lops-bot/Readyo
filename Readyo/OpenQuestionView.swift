@@ -97,7 +97,7 @@ struct OpenWordCard: View {
                         .frame(height: 80)
                     
                     VStack(spacing: 6) {
-                        Image(systemName: word.symbolName)
+                        Image(systemName: word.imageName)
                             .font(.system(size: 30))
                             .foregroundColor(isPressed ? .white : cardColor)
                         

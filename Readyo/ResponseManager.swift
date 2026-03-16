@@ -176,36 +176,30 @@ class ResponseManager: ObservableObject {
     
     // Speak the selected response out loud
     func speak(_ text: String) {
-        AVSpeechSynthesisVoice.speechVoices().filter {
-            $0.name.contains("Allison")
-        }.forEach {
-            print("🎵 Voice: \($0.name) - ID: \($0.identifier)")
-        }
         do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback,
-                mode: .spokenAudio,
-                options: .duckOthers
-            )
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("Audio session error: \(error)")
-        }
-        
+                try AVAudioSession.sharedInstance().setCategory(
+                    .playback,
+                    mode: .spokenAudio,
+                    options: .duckOthers
+                )
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                print("Audio error: \(error)")
+            }
+            
+          
         synthesizer.stopSpeaking(at: .immediate)
         
         let utterance = AVSpeechUtterance(string: text)
         
-        // Try to find a warm natural voice
         let preferredVoices = [
-            "com.apple.voice.premium.en-AU.Karen",   // Australian premium
-            "com.apple.voice.enhanced.en-AU.Karen",  // Australian enhanced
+            "com.apple.ttsbundle.Allison-premium",
+            "com.apple.ttsbundle.Allison-compact",
             "com.apple.voice.enhanced.en-US.Allison",
-            "com.apple.voice.premium.en-US.Samantha",// US premium
-            "com.apple.voice.enhanced.en-US.Samantha"// US enhanced
+            "com.apple.voice.premium.en-US.Samantha",
+            "com.apple.voice.enhanced.en-US.Samantha"
         ]
         
-        // Use first available premium voice
         var selectedVoice: AVSpeechSynthesisVoice? = nil
         for voiceID in preferredVoices {
             if let voice = AVSpeechSynthesisVoice(identifier: voiceID) {
@@ -214,17 +208,30 @@ class ResponseManager: ObservableObject {
             }
         }
         
-        // Fallback to any Australian voice
         if selectedVoice == nil {
             selectedVoice = AVSpeechSynthesisVoice(language: "en-AU")
         }
         
         utterance.voice = selectedVoice
-        utterance.rate = 0.42        // Natural conversational pace
-        utterance.pitchMultiplier = 1.15  // Slightly higher, warmer
+        utterance.rate = 0.42
+        utterance.pitchMultiplier = 1.15
         utterance.volume = 1.0
-        utterance.preUtteranceDelay = 0.1  // Tiny pause before speaking
+        utterance.preUtteranceDelay = 0.0
         
         synthesizer.speak(utterance)
+    }
+
+    // Pre-warm audio session
+    init() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: .duckOthers
+            )
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Audio session init error: \(error)")
+        }
     }
 }

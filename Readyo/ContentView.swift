@@ -328,9 +328,16 @@ struct LargeWordCard: View {
                     .shadow(radius: 8)
                     .frame(width: 130, height: 130)
                 
-                Image(systemName: word.symbolName)
-                    .font(.system(size: 65))
-                    .foregroundColor(cardColor)
+                if let uiImage = UIImage(named: word.imageName) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 100, height: 100)
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: 65))
+                        .foregroundColor(cardColor)
+                }
             }
             
             Text(word.text.capitalized)
