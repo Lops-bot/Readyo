@@ -243,7 +243,12 @@ class WordLibrary {
     // Find words matching keywords
     func findWords(matching keywords: [String]) -> [Word] {
         return keywords.compactMap { keyword in
-            allWords.first { $0.text.lowercased() == keyword.lowercased() }
+            // Try exact match first
+            if let exact = allWords.first(where: { $0.text.lowercased() == keyword.lowercased() }) {
+                return exact
+            }
+            // Try partial match as fallback
+            return allWords.first(where: { $0.text.lowercased().contains(keyword.lowercased()) || keyword.lowercased().contains($0.text.lowercased()) })
         }
     }
     

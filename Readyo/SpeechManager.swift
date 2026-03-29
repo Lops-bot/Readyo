@@ -16,6 +16,9 @@ class SpeechManager: ObservableObject {
     @Published var spokenText: String = ""
     @Published var keyWords: [String] = []
     @Published var isRecording: Bool = false
+    @Published var keyWordsReady: Bool = false
+    @Published var isProcessing: Bool = false
+    
     
     private var speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -130,15 +133,11 @@ class SpeechManager: ObservableObject {
                     // isFinal means Apple is done recognizing
                     if result.isFinal {
                         print("✅ Final result: \(self.spokenText)")
-                        self.extractKeyWords(from: self.spokenText)
-                        print("🔑 Keywords: \(self.keyWords)")
                         self.stopRecording()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            if !self.didComplete {
-                                self.didComplete = true
-                                print("🚀 Firing completion from isFinal, keywords: \(self.keyWords)")
-                                self.autoStopCompletion?()
-                            }
+                        self.extractKeyWords(from: self.spokenText)
+                        if !self.didComplete {
+                            self.didComplete = true
+                            self.autoStopCompletion?()
                         }
                     }
                 }
@@ -209,42 +208,48 @@ class SpeechManager: ObservableObject {
     
     // MARK: - Keyword Extraction
     private func extractKeyWords(from text: String) {
-        let lowered = text.lowercased()
-        
-        // Check for two word combinations first
-        let twoWordPhrases = ["ice cream", "thank you", "toilet paper",
-                             "play ground", "bed room", "bath room"]
-        var foundPhrases: [String] = []
-        for phrase in twoWordPhrases {
-            if lowered.contains(phrase) {
-                foundPhrases.append(phrase)
+        Task {
+            print("🔄 Calling Claude with: \(text)")
+            let keywords = await ClaudeService.shared.extractKeywords(from: text)
+            print("🔄 Claude returned: \(keywords)")
+            await MainActor.run {
+                if !keywords.isEmpty {
+                    self.keyWords = keywords
+                    print("🤖 Claude extracted: \(keywords)")
+                } else {
+                    self.basicExtractKeyWords(from: text)
+                }
+                // Notify that keywords are ready
+                self.isProcessing = false
+                self.keyWordsReady = true
             }
         }
+    }
+
+    // Fallback basic extraction
+    private func basicExtractKeyWords(from text: String) {
+        let stopWords = ["the", "a", "an", "is", "are", "was", "were",
+                        "i", "you", "he", "she", "it", "we", "they",
+                        "want", "need", "can", "please", "to", "do",
+                        "my", "your", "his", "her", "our", "their",
+                        "and", "or", "but", "in", "on", "at", "for",
+                        "what", "where", "who", "which", "how",
+                        "did", "does", "would", "could", "should",
+                        "like", "some", "any", "this", "that"]
         
-        // Then get single keywords
-        let words = lowered
+        let words = text.lowercased()
             .components(separatedBy: .whitespaces)
             .filter { !$0.isEmpty }
             .filter { !stopWords.contains($0) }
         
         var seen = Set<String>()
         let filtered = words.filter { seen.insert($0).inserted }
-        let singleWords = Array(filtered.prefix(3))
-        
-        // Combine phrases and single words
-        var combined = foundPhrases
-        for word in singleWords {
-            let alreadyCovered = foundPhrases.contains { $0.contains(word) }
-            if !alreadyCovered {
-                combined.append(word)
-            }
-        }
-        
-        keyWords = Array(combined.prefix(3))
+        keyWords = Array(filtered.prefix(3))
     }
     
     // MARK: - Question Detection
     func detectQuestionType(from text: String) -> QuestionType {
+        // Basic detection as fallback
         let lowered = text.lowercased()
         
         let openWords = ["what", "where", "who", "which",
@@ -267,34 +272,46 @@ class SpeechManager: ObservableObject {
         
         return .statement
     }
+
+    // Async Claude version
+    func detectQuestionTypeWithClaude(from text: String) async -> QuestionType {
+        return await ClaudeService.shared.detectQuestionType(from: text)
+    }
     
     // MARK: - Category Detection
     func detectCategory(from text: String) -> WordCategory? {
         let lowered = text.lowercased()
         
-        if lowered.contains("drink") || lowered.contains("eat") ||
-           lowered.contains("food") || lowered.contains("hungry") ||
-           lowered.contains("thirsty") || lowered.contains("snack") {
-            return .food
-        }
-        
         if lowered.contains("feel") || lowered.contains("feeling") ||
-           lowered.contains("emotion") || lowered.contains("mood") {
+           lowered.contains("emotion") || lowered.contains("mood") ||
+           lowered.contains("happy") || lowered.contains("sad") ||
+           lowered.contains("angry") || lowered.contains("scared") {
             return .feelings
         }
         
+        if lowered.contains("drink") || lowered.contains("eat") ||
+           lowered.contains("food") || lowered.contains("hungry") ||
+           lowered.contains("thirsty") || lowered.contains("snack") ||
+           lowered.contains("lunch") || lowered.contains("dinner") ||
+           lowered.contains("breakfast") {
+            return .food
+        }
+        
         if lowered.contains("go") || lowered.contains("where") ||
-           lowered.contains("place") || lowered.contains("room") {
+           lowered.contains("place") || lowered.contains("room") ||
+           lowered.contains("outside") || lowered.contains("inside") {
             return .places
         }
         
-        if lowered.contains("do") || lowered.contains("play") ||
-           lowered.contains("activity") || lowered.contains("want to") {
+        if lowered.contains("play") || lowered.contains("do") ||
+           lowered.contains("activity") || lowered.contains("want to") ||
+           lowered.contains("like to") {
             return .activities
         }
         
         if lowered.contains("who") || lowered.contains("person") ||
-           lowered.contains("people") || lowered.contains("with") {
+           lowered.contains("people") || lowered.contains("with") ||
+           lowered.contains("friend") || lowered.contains("family") {
             return .people
         }
         

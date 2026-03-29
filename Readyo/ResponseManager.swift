@@ -11,11 +11,13 @@ struct ResponseOption: Identifiable {
     let fullSentence: String
 }
 
+
 // MARK: - Response Manager
 class ResponseManager: ObservableObject {
     @Published var selectedResponse: ResponseOption? = nil
     
     private let synthesizer = AVSpeechSynthesizer()
+    @Published var selectedResponseText: String = ""
     
     // Generate 3 response options based on detected keywords
     func generateResponses(for keywords: [String]) -> [ResponseOption] {
@@ -172,6 +174,19 @@ class ResponseManager: ObservableObject {
                 fullSentence: "Maybe later, I will think about it!"
             )
         ]
+    }
+    func generateAndSpeak(keyword: String, response: String) {
+        Task {
+            let sentence = await ClaudeService.shared.generateResponse(
+                for: keyword,
+                response: response
+            )
+            await MainActor.run {
+                self.selectedResponseText = sentence.isEmpty ?
+                    "I would like \(keyword) please." : sentence
+                self.speak(self.selectedResponseText)
+            }
+        }
     }
     
     // Speak the selected response out loud

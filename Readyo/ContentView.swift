@@ -5,16 +5,21 @@ import Combine
 
 // MARK: - App Screen States
 enum AppScreen {
-    case home           // Just microphone
-    case images         // Show keyword images + Respond button
-    case responses      // Show child response options
+    case home
+    case thinking
+    case images
+    case responses
 }
-
 struct ContentView: View {
     @StateObject private var speechManager = SpeechManager()
     @StateObject private var responseManager = ResponseManager()
-    @State private var currentScreen: AppScreen = .home
     @State private var isTransitioning: Bool = false
+    @State private var currentScreen: AppScreen = .home {
+        didSet {
+            print("🖥️ Screen: \(oldValue) → \(currentScreen)")
+        }
+    }
+    
     
     
     private let library = WordLibrary.shared
@@ -42,10 +47,9 @@ struct ContentView: View {
                 HomeScreen(
                     speechManager: speechManager,
                     onSpeechComplete: {
-                        guard !isTransitioning else { return }
-                        guard !speechManager.keyWords.isEmpty else { return }
-                        isTransitioning = true
-                        currentScreen = .images
+                        // Wait for Claude to finish
+                        print("⏳ Waiting for Claude keywords...")
+                        currentScreen = .thinking
                     }
                     
                 )
@@ -59,9 +63,12 @@ struct ContentView: View {
                         }
                     },
                     onReset: {
+                        print("🔴 Reset called from images screen!")
                         resetApp()
                     }
                 )
+            case .thinking:
+                ThinkingScreen()
                 
             case .responses:
                 ResponsesScreen(
@@ -70,9 +77,24 @@ struct ContentView: View {
                     questionType: questionType,
                     detectedCategory: detectedCategory,
                     onReset: {
+                        print("🔴 Reset called from responses screen!")
                         resetApp()
                     }
                 )
+            }
+        }
+        .onChange(of: speechManager.keyWordsReady) {
+            guard speechManager.keyWordsReady else { return }
+            guard !isTransitioning else { return }
+            guard !speechManager.keyWords.isEmpty else { return }
+            isTransitioning = true
+            speechManager.keyWordsReady = false
+            print("📱 Keywords ready, switching to images")
+            currentScreen = .images
+        }
+        .onChange(of: speechManager.isProcessing) {
+            if speechManager.isProcessing && currentScreen == .home {
+                currentScreen = .thinking
             }
         }
     }
@@ -217,6 +239,31 @@ struct ImagesScreen: View {
                     .font(.system(size: 20, weight: .medium, design: .rounded))
                     .foregroundColor(.gray)
             }
+            
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Thinking Screen
+struct ThinkingScreen: View {
+    var body: some View {
+        VStack(spacing: 30) {
+            Spacer()
+            
+            // Animated dots
+            HStack(spacing: 12) {
+                ForEach(0..<3) { i in
+                    Circle()
+                        .fill(Color(red: 0.3, green: 0.6, blue: 0.9))
+                        .frame(width: 20, height: 20)
+                        .opacity(0.7)
+                }
+            }
+            
+            Text("Understanding...")
+                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.8))
             
             Spacer()
         }
